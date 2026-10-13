@@ -86,7 +86,7 @@ function aplicarInteligencia_(ss, rows) {
   // 1. aprendizado por assinatura
   const apr = {};
   lerTabela_(ss, 'APRENDIZADO').forEach(function (r) {
-    const a = norm_(r[1]);
+    const a = String(r[1]).trim().toUpperCase();
     if (!r[2] || a === 'FALSE' || a === 'NAO' || a === 'FALSO') return;
     apr[r[2] + '|' + r[3]] = r;
   });
