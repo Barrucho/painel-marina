@@ -79,9 +79,11 @@ h2{font-size:15px;margin:20px 2px 8px}h3{font-size:14px;margin:0 0 10px}
 <div class="snack" id="snack"><span id="snackT"></span><button id="snackB">Desfazer</button></div>
 <script>
 var API='https://script.google.com/macros/s/AKfycbzybhVv_yDZts3JBqxWEEpIe57m4XSezeRVDhcrLsEUK5qYenQjonuKTqTei8itU8bi/exec';
-var K=(function(){var h=(location.hash||'').match(/k=([0-9a-f]{20,})/i),k=h?h[1]:'';
+var K=(function(){var h=((location.hash||'')+'&'+(location.search||'')).match(/k=([0-9a-f]{20,})/i),k=h?h[1].toLowerCase():'';
  try{if(k)localStorage.setItem('pm_k',k);else k=localStorage.getItem('pm_k')||'';}catch(e){}
  return k;})();
+function pedirChave(msg){$('app').innerHTML='<div class="card" style="max-width:420px;margin:40px auto"><h3 style="font-size:16px">Acesso ao painel</h3><div class="note" style="margin-bottom:10px">'+(msg||'Cole aqui o código de acesso (ou o link completo) que veio por e-mail. Só é preciso fazer isso uma vez neste aparelho.')+'</div><input type="text" id="kIn" placeholder="Código ou link de acesso" autocomplete="off" autocapitalize="off" style="width:100%"><button class="btn" style="width:100%;margin-top:10px" onclick="usarChave()">Entrar</button></div>'}
+function usarChave(){var v=($('kIn').value||'').match(/([0-9a-f]{40,})/i);if(!v){snack('Código inválido — confira se colou inteiro');return}K=v[1].toLowerCase();try{localStorage.setItem('pm_k',K)}catch(e){}carregar()}
 var D=null,M=[],CIC=[],S={lente:'caixa',per:'',banco:'',tab:'inicio',cat:null,sub:null,busca:'',fx:'tudo'},CH={},COR={};
 var MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 var NAT={DESPESA:'Gasto',RECEITA:'Receita',ESTORNO:'Estorno / devolução',INVESTIMENTO_APLICACAO:'Investimento (aplicação)',INVESTIMENTO_RESGATE:'Resgate de investimento',TRANSFERENCIA_INTERNA:'Entre minhas contas',TRANSFERENCIA_PROPRIA_EXTERNA:'Para conta minha não conectada',PAGAMENTO_FATURA:'Pagamento de fatura',PAGAMENTO_FATURA_CARTAO:'Pagamento recebido no cartão',AJUSTE_CARTAO:'Ajuste de cartão',IGNORADA:'Ignorar (não contar)'};
@@ -120,10 +122,10 @@ function protegido(x){return {IGNORADA:1,PAGAMENTO_FATURA:1,PAGAMENTO_FATURA_CAR
 function semelhantes(x){var a=assin(x),dir=x.v>0;return M.filter(function(y){return y.id!==x.id&&y.org!=='MANUAL'&&!protegido(y)&&(y.v>0)===dir&&assin(y)===a})}
 // comunicação
 function call(fn,arg,ok,fail){
- if(!K){$('app').innerHTML='<div class="loading">Link sem chave de acesso. Abra o link completo recebido por e-mail.</div>';return}
+ if(!K){pedirChave();return}
  fetch(API,{method:'POST',credentials:'omit',redirect:'follow',body:JSON.stringify({k:K,fn:fn,arg:arg})})
  .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
- .then(function(j){if(!j.ok){if(/autorizado/i.test(j.erro||'')){try{localStorage.removeItem('pm_k')}catch(e){}$('app').innerHTML='<div class="loading">Acesso não autorizado. Peça o link novo.</div>';return}throw new Error(j.erro)}ok&&ok(j.r)})
+ .then(function(j){if(!j.ok){if(/autorizado/i.test(j.erro||'')){try{localStorage.removeItem('pm_k')}catch(e){}K='';pedirChave('Código de acesso inválido ou trocado. Cole o código/link mais recente que veio por e-mail.');return}throw new Error(j.erro)}ok&&ok(j.r)})
  .catch(function(e){snack('Erro: '+(e.message||e));fail&&fail(e)});
 }
 var _sn;function snack(t,acao,ms){$('snackT').textContent=t;var b=$('snackB');b.style.display=acao?'':'none';b.onclick=function(){$('snack').className='snack';acao&&acao()};$('snack').className='snack on';clearTimeout(_sn);_sn=setTimeout(function(){$('snack').className='snack'},ms||(acao?9000:2600))}
