@@ -59,7 +59,7 @@ h2{font-size:15px;margin:20px 2px 8px}h3{font-size:14px;margin:0 0 10px}
 .mini{font-size:12px;color:var(--mut)}
 </style></head><body>
 <header class="top"><div class="brand"><div class="logo">M</div><div><div class="ttl">Finanças da Marina</div><div class="sub" id="sync">carregando…</div></div></div>
-<div class="icons"><button class="icon" id="btnCats" title="Categorias">&#9881;</button><button class="icon" id="btnReload" title="Recarregar dados">&#x21bb;</button></div></header>
+<div class="icons"><button class="icon" id="btnHelp" title="Como ler o painel" style="font-weight:700">?</button><button class="icon" id="btnCats" title="Categorias">&#9881;</button><button class="icon" id="btnReload" title="Recarregar dados">&#x21bb;</button></div></header>
 <div class="filters">
  <div class="seg" id="lente"><button data-v="caixa" class="on">Caixa</button><button data-v="consumo">Consumo</button></div>
  <div class="periodo"><button id="prev" title="Ciclo anterior">&#8249;</button><select id="per"></select><button id="next" title="Próximo ciclo">&#8250;</button></div>
@@ -139,8 +139,11 @@ function prep(){M=D.mov.map(function(a){return{id:String(a[0]),data:String(a[1]|
  CIC=ciclos()}
 function cor(c){return COR[c]||OUTRAS}
 // ciclos: começam no dia do pagamento dos plantões (maior entrada entre os dias 15 e 28; padrão dia 20)
-function ciclos(){var rec=M.filter(function(x){return x.nat==='RECEITA'&&x.ec&&x.v>0}),an={};
+function ciclos(){var rec=M.filter(function(x){return x.nat==='RECEITA'&&x.ec&&x.v>0&&x.tr!=='Rendimentos financeiros'}),an={};
  rec.forEach(function(x){var m=x.data.slice(0,7),d=+x.data.slice(8,10);if(d<15||d>28)return;if(!an[m]||x.v>an[m].v)an[m]=x});
+ // a âncora precisa ter porte de pagamento de plantões (>= 40% da mediana das âncoras); senão o ciclo começa no dia 20 previsto
+ var vs=Object.keys(an).map(function(k){return an[k].v}).sort(function(a,b){return a-b}),med=vs.length?vs[Math.floor(vs.length/2)]:0;
+ Object.keys(an).forEach(function(k){if(an[k].v<med*0.4)delete an[k]});
  var ini=D.mov.length?M.reduce(function(a,x){return x.data&&x.data<a?x.data:a},D.hoje).slice(0,7):D.hojeMes,ms=[],m=addM(ini,-1);
  while(m<=addM(D.hojeMes,1)){ms.push(m);m=addM(m,1)}
  var st=ms.map(function(m){var a=an[m];return{ini:a?a.data:m+'-20',det:!!a,val:a?a.v:0,cp:a?a.cp:''}});
@@ -214,7 +217,7 @@ function rDesp(){var p=periodo(),c=calc(p),rows=gastos(c.rows),g=agrupa(rows,'ca
  g.forEach(function(k){var b=base[k[0]],al=b&&Math.abs(k[1])>Math.abs(b)*1.3&&Math.abs(k[1])-Math.abs(b)>200;
   h+='<div class="row click'+(S.cat===k[0]?' sel':'')+'" onclick="selCat(\''+jsq(k[0])+'\')"><div class="l"><div class="t"><span class="dot" style="background:'+cor(k[0])+'"></span>'+esc(k[0])+(al?'<span class="vs neg">acima da média</span>':'')+'</div><div class="bar"><i style="width:'+Math.min(100,Math.abs(k[1])/tot*100)+'%;background:'+cor(k[0])+'"></i></div></div><div class="r">'+brl(Math.abs(k[1]))+'<div class="mini">'+pct(Math.abs(k[1])/tot)+'</div></div></div>'});
  h+=(g.length?'':'<div class="note">Sem gastos no período.</div>')+'</div></div>';
- h+='<div id="det">'+(S.cat?detalheCat(rows):'')+'</div>';
+ h+='<div id="det">'+(S.cat?(S.cat==='Cartão de crédito'&&S.lente==='caixa'?detalheCartao():detalheCat(rows)):'')+'</div>';
  if(!S.cat){var est=agrupa(rows.filter(function(x){return x.v<0}),function(x){return x.cp||x.desc}).sort(function(a,b){return a[1]-b[1]}).slice(0,8);
   h+='<h2>Onde mais gastou</h2><div class="card">'+est.map(function(k){return '<div class="row click" onclick="S.busca=\''+jsq(k[0])+'\';S.fx=\'tudo\';aba(\'extrato\')"><div class="t">'+esc(k[0])+'</div><div class="r">'+brl(Math.abs(k[1]))+'</div></div>'}).join('')+'</div>';
   h+='<h2>Gastos recorrentes (assinaturas e contas fixas)</h2><div class="card">'+recorrentes()+'</div>';
@@ -234,6 +237,37 @@ function recorrentes(){var fim=D.hoje,ini=addD(fim,-185),g={};
  M.forEach(function(x){if(x.nat!=='DESPESA'||!x.eo||x.data<ini||x.data>fim||(S.banco&&x.banco!==S.banco))return;var k=assin(x);if(!g[k])g[k]={n:x.cp||x.desc,m:{},vals:[]};g[k].m[x.data.slice(0,7)]=1;g[k].vals.push(x.v)});
  var r=Object.keys(g).filter(function(k){var o=g[k],n=Object.keys(o.m).length;if(n<4)return false;var md=soma(o.vals)/o.vals.length;return o.vals.every(function(v){return Math.abs(v-md)<=Math.abs(md)*0.35})}).map(function(k){return[g[k].n,soma(g[k].vals)/Object.keys(g[k].m).length]}).sort(function(a,b){return a[1]-b[1]}).slice(0,15);
  return r.map(function(k){return '<div class="row"><div class="t">'+esc(k[0])+'</div><div class="r">'+brl(Math.abs(k[1]))+'<div class="mini">por mês</div></div></div>'}).join('')||'<div class="note">Nenhum padrão recorrente encontrado.</div>'}
+
+function dividaCartao(){var ct=D.contas.filter(function(r){return r[2]==='CARTAO'&&(!S.banco||r[1]===S.banco)}),tot=soma(ct,function(r){return +r[6]||0}),nomes={};ct.forEach(function(r){nomes[r[4]]=1});
+ var fut=-soma(M.filter(function(x){return x.ct==='CARTAO'&&nomes[x.cn]&&(x.nat==='DESPESA'||x.nat==='ESTORNO')&&x.data>D.hoje}),function(x){return x.v});fut=Math.max(0,Math.min(fut,tot));return{tot:tot,futuro:fut,aberto:tot-fut}}
+function barraDiv(parts){var t=soma(parts,function(p){return Math.max(0,p[0])})||1;return '<div class="split" style="height:18px">'+parts.map(function(p){return '<i style="width:'+(Math.max(0,p[0])/t*100)+'%;background:'+p[2]+'"></i>'}).join('')+'</div><div class="leg">'+parts.map(function(p){return '<span><span class="dot" style="background:'+p[2]+'"></span>'+p[1]+': <b style="color:var(--tx)">'+brl(p[0])+'</b></span>'}).join('')+'</div>'}
+// compras que compõem cada fatura paga (pela fatura informada pelo banco)
+function faturasPagas(p){return M.filter(function(x){return x.nat==='PAGAMENTO_FATURA'&&x.data>=p.ini&&x.data<=p.fim&&(!S.banco||x.banco===S.banco)}).sort(function(a,b){return a.v-b.v}).map(function(x){var c=M.filter(function(y){return y.id===x.par})[0],mo=addD(x.data,5).slice(0,7);
+ var rows=c?M.filter(function(y){return y.ct==='CARTAO'&&y.cn===c.cn&&y.mo===mo&&y.data<=x.data&&(y.nat==='DESPESA'||y.nat==='ESTORNO')}):[];return{pag:x,cartao:c?c.cn:'Cartão não identificado',mes:mo,rows:rows,total:-soma(rows,function(y){return y.v})}})}
+function detalheCartao(){var p=periodo(),fs=faturasPagas(p),tot=-soma(fs,function(f){return f.pag.v});
+ var h='<h2 style="display:flex;justify-content:space-between;align-items:center"><span><span class="dot" style="background:'+cor('Cartão de crédito')+'"></span>Cartão de crédito · '+brl(tot)+'</span><button class="btn sec sm" onclick="S.cat=null;S.sub=null;render()">Fechar ✕</button></h2>';
+ h+='<div class="note">Na lente Caixa, o cartão aparece como <b>faturas pagas</b> neste período. Abaixo, o que cada fatura pagou — as compras são de antes (do mês anterior). Para ver as compras feitas <i>neste</i> período, use a lente <b>Consumo</b>.</div>';
+ fs.forEach(function(f,i){var g=agrupa(f.rows,'cat').filter(function(k){return k[1]<0}).sort(function(a,b){return a[1]-b[1]}),pago=-f.pag.v,dif=pago-f.total;
+  h+='<div class="card" style="margin-top:10px"><div class="row" style="border:0;padding-top:0"><div class="l"><div class="t">'+esc(f.cartao)+'</div><div class="s">fatura de '+MES[+f.mes.slice(5,7)-1]+'/'+f.mes.slice(2,4)+' · paga em '+fdd(f.pag.data)+' · '+f.rows.length+' compras</div></div><div class="r">'+brl(pago)+'</div></div>';
+  h+=g.slice(0,8).map(function(k){return '<div class="row"><div class="l"><div class="t" style="font-weight:500"><span class="dot" style="background:'+cor(k[0])+'"></span>'+esc(k[0])+'</div><div class="bar"><i style="width:'+Math.min(100,Math.abs(k[1])/(pago||1)*100)+'%;background:'+cor(k[0])+'"></i></div></div><div class="r">'+brl(Math.abs(k[1]))+'</div></div>'}).join('');
+  if(Math.abs(dif)>1)h+='<div class="note">'+(dif>0?'R$ '+Math.round(dif).toLocaleString('pt-BR')+' do pagamento não aparecem como compras desta fatura (juros, anuidade, saldo anterior ou compras lançadas em outra fatura).':'As compras listadas somam '+brl(-dif)+' a mais que o valor pago — o banco atribuiu algumas compras a esta fatura que foram cobradas em outra.')+'</div>';
+  h+='<div style="margin-top:8px"><button class="btn sec sm" onclick="var e=$(\'fx'+i+'\');e.style.display=e.style.display?\'\':\'none\'">Ver as '+f.rows.length+' compras</button></div><div id="fx'+i+'" style="display:none;margin-top:6px">'+lista(f.rows.slice().sort(function(a,b){return a.v-b.v}),300)+'</div></div>'});
+ if(!fs.length)h+='<div class="note">Nenhuma fatura paga neste período.</div>';
+ h+='<button class="btn" style="width:100%;margin-top:12px" onclick="S.lente=\'consumo\';[].forEach.call($(\'lente\').children,function(b){b.className=b.getAttribute(\'data-v\')===\'consumo\'?\'on\':\'\'});S.cat=null;render()">Ver as compras do cartão deste período (lente Consumo)</button>';return h}
+// ===================== COMO LER O PAINEL
+function ajuda(){var p=periodo(),lc=S.lente,r={};['caixa','consumo'].forEach(function(l){S.lente=l;var c=calc(p),g=gastos(c.rows);r[l]={tot:-soma(g,function(x){return x.v}),fat:-soma(g.filter(function(x){return x.nat==='PAGAMENTO_FATURA'}),function(x){return x.v}),card:-soma(g.filter(function(x){return x.ct==='CARTAO'}),function(x){return x.v})};r[l].conta=r[l].tot-r[l].fat-r[l].card});S.lente=lc;
+ var dc=dividaCartao(),ct=D.contas.filter(function(x){return !S.banco||x[1]===S.banco}),sb=soma(ct.filter(function(x){return x[2]!=='CARTAO'}),function(x){return +x[6]||0}),iv=soma(D.invest.filter(function(x){return(!S.banco||x[0]===S.banco)&&(+x[5]||0)>0}),function(x){return +x[5]}),mx=Math.max(r.caixa.tot,r.consumo.tot)||1;
+ function seg(v,c,l){return v>0.5?'<i title="'+esc(l)+'" style="width:'+(v/mx*100)+'%;background:'+c+'"></i>':''}
+ var h='<h3 style="font-size:17px">Como ler o painel</h3><div class="note">Números do período selecionado: <b>'+esc(p.nome)+'</b>. Mude o período no topo e abra de novo para ver outro.</div>';
+ h+='<h2>1 · Caixa x Consumo: a mesma vida, dois relógios</h2><div class="note" style="font-size:13px;color:var(--tx2)">A diferença está só em <b>quando</b> o gasto do cartão é contado. O que é pago direto da conta (Pix, boleto, débito) é igual nas duas.</div>';
+ h+='<div class="card" style="margin-top:8px"><div class="mini"><b style="color:var(--tx)">Caixa</b> — quando o dinheiro saiu da conta · '+brl(r.caixa.tot)+'</div><div class="split" style="height:22px;margin-top:6px">'+seg(r.caixa.conta,PAL[0],'Pago direto da conta')+seg(r.caixa.fat,PAL[3],'Faturas pagas')+'</div>';
+ h+='<div class="mini" style="margin-top:14px"><b style="color:var(--tx)">Consumo</b> — quando a compra foi feita · '+brl(r.consumo.tot)+'</div><div class="split" style="height:22px;margin-top:6px">'+seg(r.consumo.conta,PAL[0],'Pago direto da conta')+seg(r.consumo.card,PAL[1],'Compras no cartão')+'</div>';
+ h+='<div class="leg"><span><span class="dot" style="background:'+PAL[0]+'"></span>Pago direto da conta: '+brl(r.caixa.conta)+'</span><span><span class="dot" style="background:'+PAL[3]+'"></span>Faturas pagas (compras do mês anterior): '+brl(r.caixa.fat)+'</span><span><span class="dot" style="background:'+PAL[1]+'"></span>Compras feitas no cartão neste período: '+brl(r.consumo.card)+'</span></div></div>';
+ h+='<div class="note" style="font-size:13px;color:var(--tx2)"><b>Use Caixa</b> para saber se o dinheiro do ciclo fechou (sobrou ou faltou na conta). <b>Use Consumo</b> para saber com o que vocês gastaram neste período — é a lente boa para categorias, porque abre o cartão compra por compra. Na lente Caixa, as compras do cartão aparecem juntas em "Cartão de crédito".</div>';
+ h+='<h2>2 · O que tem dentro de "Cartão de crédito"</h2><div class="note" style="font-size:13px;color:var(--tx2)">Em <b>Gastos</b>, na lente Caixa, toque em "Cartão de crédito": aparece cada fatura paga no período, dividida por categoria, com a lista de compras. As compras dessas faturas foram feitas no mês anterior.</div>';
+ h+='<h2>3 · Patrimônio e "faturas em aberto"</h2><div class="card"><div class="mini">Hoje</div>'+barraDiv([[sb,'Dinheiro nas contas',PAL[0]],[iv,'Investimentos',PAL[2]]])+'<div class="mini" style="margin-top:12px">menos o que já foi gasto no cartão e ainda não foi pago</div>'+barraDiv([[dc.aberto,'Compras ainda não pagas',PAL[1]],[dc.futuro,'Parcelas futuras',PAL[3]]])+'<div class="row" style="margin-top:8px"><div class="t">Saldo líquido</div><div class="r '+(sb+iv-dc.tot>=0?'pos':'neg')+'">'+brl(sb+iv-dc.tot)+'</div></div></div>';
+ h+='<div class="note" style="font-size:13px;color:var(--tx2)">"Faturas em aberto" é uma dívida já assumida: compras feitas e ainda não pagas, incluindo parcelas dos próximos meses. O saldo líquido fica negativo perto do fim do ciclo porque o dinheiro da conta já foi usado e o cartão acumulou o mês; quando os plantões entram (~dia 20) e a fatura é paga, ele volta a subir. Vale olhar a tendência ciclo a ciclo, não um dia isolado.</div>';
+ h+='<button class="btn" style="width:100%;margin-top:14px" onclick="fechar()">Entendi</button>';$('sheet').innerHTML=h;$('modal').className='modal'}
 // ===================== RECEITAS
 function rRec(){var p=periodo(),c=calc(p),rows=c.rows.filter(function(x){return x.nat==='RECEITA'}),cur=cicAtual(),ult=CIC.slice(Math.max(0,cur-12),cur),vals=ult.map(function(cc){return calc(cc).rec}),med=vals.length?soma(vals)/vals.length:0,dp=vals.length?Math.sqrt(soma(vals,function(v){return(v-med)*(v-med)})/vals.length):0;
  var h='<div class="grid g4">'+kpi('Receitas no período',brl(c.rec),'','pos')+kpi('Média por ciclo',brl(med),'últimos '+vals.length+' ciclos fechados')+kpi('Menor / maior ciclo',vals.length?brl(Math.min.apply(null,vals)):'—',vals.length?'maior: '+brl(Math.max.apply(null,vals)):'')+kpi('Volatilidade',pct(med?dp/med:null),'variação típica entre ciclos',med&&dp/med>0.25?'warn':'')+'</div>';
@@ -251,7 +285,8 @@ pos.receitas=function(){var cur=cicAtual(),cs=CIC.slice(Math.max(0,cur-11),cur+1
 // ===================== PATRIMÔNIO
 function rPat(){var ct=D.contas.filter(function(r){return !S.banco||r[1]===S.banco}),iv=D.invest.filter(function(r){return !S.banco||r[0]===S.banco});
  var sb=soma(ct.filter(function(r){return r[2]!=='CARTAO'}),function(r){return +r[6]||0}),fa=soma(ct.filter(function(r){return r[2]==='CARTAO'}),function(r){return +r[6]||0}),at=iv.filter(function(r){return (+r[5]||0)>0}),tot=soma(at,function(r){return +r[5]}),apl=soma(at,function(r){return +r[6]||0});
- var h='<div class="grid g4">'+kpi('Saldo em contas',brl(sb),'hoje',sb>=0?'':'neg')+kpi('Faturas em aberto',brl(-fa),'cartões',fa>0?'neg':'')+kpi('Investimentos',brl(tot),'saldo aplicado')+kpi('Patrimônio líquido',brl(sb+tot-fa),'contas + invest. − faturas')+'</div>';
+ var h='<div class="grid g4">'+kpi('Saldo em contas',brl(sb),'hoje',sb>=0?'':'neg')+kpi('Faturas em aberto',brl(-fa),'cartões',fa>0?'neg':'')+kpi('Investimentos',brl(tot),'saldo aplicado')+kpi('Saldo líquido',brl(sb+tot-fa),'contas + invest. − cartões',sb+tot-fa>=0?'pos':'neg')+'</div>';
+ var dc=dividaCartao();h+='<div class="card" style="margin-top:12px"><h3>O que são os '+brl(fa)+' nos cartões</h3>'+barraDiv([[dc.aberto,'Compras já feitas, ainda não pagas',PAL[1]],[dc.futuro,'Parcelas que vencem nos próximos meses',PAL[3]]])+'<div class="note">É tudo o que já foi comprado no cartão e ainda não saiu da conta. A maior parte é paga com o próximo pagamento dos plantões (fatura que vence por volta do dia 22–25). "Saldo líquido" considera só as contas, investimentos e cartões conectados — não inclui imóveis, carro, conta PJ ou bens fora desses bancos.</div></div>';
  var p=periodo(),sc=semCaixa(p);
  h+='<h2>Fora do caixa no período ('+esc(p.nome)+')</h2><div class="grid g3">'+kpi('Aplicou',brl(Math.abs(soma(sc.filter(function(x){return x.nat==='INVESTIMENTO_APLICACAO'}),function(x){return x.v}))))+kpi('Resgatou',brl(soma(sc.filter(function(x){return x.nat==='INVESTIMENTO_RESGATE'}),function(x){return x.v})))+kpi('Entre suas contas',String(sc.filter(function(x){return x.nat==='TRANSFERENCIA_INTERNA'&&x.v>0}).length),'transferências')+'</div><div class="note">Investimentos e transferências entre suas contas não são entrada nem saída de caixa. Toque em "Extrato › Fora do caixa" para conferir e corrigir.</div>';
  h+='<h2>Contas</h2><div class="card">'+ct.filter(function(r){return r[2]!=='CARTAO'}).map(function(r){return '<div class="row"><div class="l"><div class="t">'+esc(r[1])+' · '+esc(r[2]==='POUPANCA'?'Poupança':'Conta corrente')+'</div><div class="s">'+esc(r[4])+'</div></div><div class="r '+((+r[6])<0?'neg':'')+'">'+brl(+r[6],1)+'</div></div>'}).join('')+'</div>';
@@ -333,7 +368,7 @@ $('de').addEventListener('change',render);$('ate').addEventListener('change',ren
 $('banco').addEventListener('change',function(){S.banco=this.value;render()});
 function passo(n){var t=S.per.split(':'),i=t[0]==='c'?+t[1]+n:cicAtual();if(i<0||i>=CIC.length)return;S.per='c:'+i;if(![].some.call($('per').options,function(x){return x.value===S.per}))return;$('per').value=S.per;$('custom').className='';render()}
 $('prev').addEventListener('click',function(){passo(-1)});$('next').addEventListener('click',function(){passo(1)});
-$('btnReload').addEventListener('click',carregar);$('btnCats').addEventListener('click',function(){if(D)abrirCats()});
+$('btnReload').addEventListener('click',carregar);$('btnHelp').addEventListener('click',function(){if(D)ajuda()});$('btnCats').addEventListener('click',function(){if(D)abrirCats()});
 $('modal').addEventListener('click',function(e){if(e.target===this)fechar()});
 carregar();
 </script></body></html>
