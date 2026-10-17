@@ -121,12 +121,13 @@ function assin(x){var d=String(x.doc||'').replace(/\D/g,''),cp=nrm(x.cp),g=GATE.
 function protegido(x){return {IGNORADA:1,PAGAMENTO_FATURA:1,PAGAMENTO_FATURA_CARTAO:1,AJUSTE_CARTAO:1}[x.nat]||(x.nat==='TRANSFERENCIA_INTERNA'&&x.par)}
 function semelhantes(x){var a=assin(x),dir=x.v>0;return M.filter(function(y){return y.id!==x.id&&y.org!=='MANUAL'&&!protegido(y)&&(y.v>0)===dir&&assin(y)===a})}
 // comunicação
-function call(fn,arg,ok,fail){
- if(!K){pedirChave();return}
- fetch(API,{method:'POST',credentials:'omit',redirect:'follow',body:JSON.stringify({k:K,fn:fn,arg:arg})})
- .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+function call(fn,arg,ok,fail,tent){
+ if(!K){pedirChave();return}tent=tent||0;
+ fetch(API,{method:'POST',credentials:'omit',redirect:'follow',cache:'no-store',body:JSON.stringify({k:K,fn:fn,arg:arg,t:Date.now()})})
+ .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text()})
+ .then(function(t){try{return JSON.parse(t)}catch(e){var er=new Error('resposta inesperada do Google');er.retry=true;throw er}})
  .then(function(j){if(!j.ok){if(/autorizado/i.test(j.erro||'')){try{localStorage.removeItem('pm_k')}catch(e){}K='';pedirChave('Código de acesso inválido ou trocado. Cole o código/link mais recente que veio por e-mail.');return}throw new Error(j.erro)}ok&&ok(j.r)})
- .catch(function(e){snack('Erro: '+(e.message||e));fail&&fail(e)});
+ .catch(function(e){if((e.retry||e instanceof TypeError)&&tent<3&&(fn==='dadosPainel'||fn==='reprocessarPainel'||e.retry)){setTimeout(function(){call(fn,arg,ok,fail,tent+1)},1200*(tent+1));return}snack('Erro: '+(e.message||e));fail&&fail(e)});
 }
 var _sn;function snack(t,acao,ms){$('snackT').textContent=t;var b=$('snackB');b.style.display=acao?'':'none';b.onclick=function(){$('snack').className='snack';acao&&acao()};$('snack').className='snack on';clearTimeout(_sn);_sn=setTimeout(function(){$('snack').className='snack'},ms||(acao?9000:2600))}
 function carregar(){$('app').innerHTML='<div class="loading">Carregando seus dados…</div>';call('dadosPainel',undefined,function(t){aplicar(t)})}
